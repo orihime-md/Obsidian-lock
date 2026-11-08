@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OBSIDIAN LOCK // PAIRING TERMINAL</title>
+<style>
+  :root {
+    --bg: #030206;
+    --card: #0b0813;
+    --border: #2b1842;
+    --accent: #8b28f7;
+    --accent-bright: #b056ff;
+    --cyan: #0df;
+    --text: #eae6f0;
+    --muted: #8e839e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(circle at 50% 10%, #15092a, var(--bg) 85%);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "JetBrains Mono", monospace;
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .terminal {
+    width: 100%;
+    max-width: 520px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.8), 0 0 20px rgba(139, 40, 247, 0.15);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .header {
+    background: #110c1c;
+    border-bottom: 1px solid var(--border);
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo { font-size: 22px; color: var(--accent-bright); text-shadow: 0 0 10px var(--accent); }
+  .title { font-size: 15px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; }
+  .tag { font-size: 10px; padding: 4px 8px; border-radius: 4px; background: rgba(0, 221, 255, 0.1); color: var(--cyan); border: 1px solid rgba(0, 221, 255, 0.3); }
+  .body { padding: 24px; }
+  .desc { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 20px; }
+  .input-group { margin-bottom: 16px; }
+  label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 6px; }
+  input {
+    width: 100%;
+    background: #06040a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    color: #fff;
+    font-size: 14px;
+    outline: none;
+    transition: border 0.2s;
+  }
+  input:focus { border-color: var(--accent-bright); }
+  button {
+    width: 100%;
+    background: linear-gradient(135deg, #741cd6, #4b0e91);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 13px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(116, 28, 214, 0.4);
+    transition: 0.2s;
+  }
+  button:hover { filter: brightness(1.15); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .code-display {
+    display: none;
+    margin-top: 18px;
+    background: rgba(139, 40, 247, 0.08);
+    border: 1px dashed var(--accent);
+    padding: 16px;
+    border-radius: 6px;
+    text-align: center;
+  }
+  .code-box {
+    font-size: 26px;
+    font-weight: 900;
+    letter-spacing: 0.3em;
+    color: var(--cyan);
+    margin: 8px 0;
+  }
+  .copy-btn {
+    background: #181126;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    font-size: 11px;
+    width: auto;
+    margin-top: 6px;
+  }
+  .status-line {
+    font-size: 11px;
+    margin-top: 14px;
+    color: var(--muted);
+    min-height: 20px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="terminal">
+  <div class="header">
+    <div class="brand">
+      <span class="logo">❖</span>
+      <span class="title">Obsidian Lock</span>
+    </div>
+    <span class="tag">ACTIVE GRID</span>
+  </div>
+  
+  <div class="body">
+    <p class="desc">Enter your WhatsApp phone number with country code to request an authorization code for the Obsidian Sentinel core.</p>
+
+    <div class="input-group">
+      <label>WhatsApp Number (Country Code + Digits)</label>
+      <input type="tel" id="phoneNumber" placeholder="2348012345678" maxlength="16">
+    </div>
+
+    <button id="submitBtn">Generate Pairing Code</button>
+
+    <div class="code-display" id="codePanel">
+      <div style="font-size: 10px; color: var(--muted); letter-spacing: 0.1em;">AUTHORIZATION CODE</div>
+      <div class="code-box" id="codeText">--------</div>
+      <button class="copy-btn" id="copyBtn">Copy Code</button>
+    </div>
+
+    <div class="status-line" id="statusMessage">Awaiting operator input...</div>
+
+  </div>
+</div>
+
+<script>
+  const phoneInput = document.getElementById('phoneNumber');
+  const submitBtn = document.getElementById('submitBtn');
+  const codePanel = document.getElementById('codePanel');
+  const codeText = document.getElementById('codeText');
+  const copyBtn = document.getElementById('copyBtn');
+  const statusMessage = document.getElementById('statusMessage');
+
+  let pollInterval = null;
+  let pairingToken = '';
+  let pollAttempts = 0;
+  const maxPollAttempts = 120;
+
+  async function requestPairing() {
+    const rawNumber = phoneInput.value.replace(/\D/g, '');
+    if (rawNumber.length < 10 || rawNumber.length > 15) {
+      statusMessage.textContent = 'Please enter a valid phone number with country code.';
+      return;
+    }
+
+    submitBtn.disabled = true;
+    codePanel.style.display = 'none';
+    pairingToken = '';
+    statusMessage.textContent = 'Contacting core and generating pairing session...';
+
+    try {
+      const res = await fetch('/api/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: rawNumber })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Request rejected');
+
+      if (!data.token) throw new Error('Pairing token was not returned by the server.');
+      pairingToken = data.token;
+      statusMessage.textContent = 'Pairing sequence active. Waiting for code...';
+      pollCode(rawNumber, pairingToken);
+    } catch (err) {
+      statusMessage.textContent = 'Error: ' + err.message;
+      submitBtn.disabled = false;
+    }
+  }
+
+  function pollCode(number, token) {
+    if (pollInterval) clearInterval(pollInterval);
+    pollAttempts = 0;
+
+    pollInterval = setInterval(async () => {
+      pollAttempts += 1;
+      if (pollAttempts > maxPollAttempts) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+        statusMessage.textContent = 'Pairing status timed out. Request a fresh code and try again.';
+        submitBtn.disabled = false;
+        return;
+      }
+      try {
+        const res = await fetch(`/api/pair/status?number=${encodeURIComponent(number)}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          if (res.status === 403 || res.status === 404) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+            statusMessage.textContent = data.error || 'Pairing session is no longer available. Request a fresh code.';
+            submitBtn.disabled = false;
+            return;
+          }
+          throw new Error(data.error || 'Could not read pairing status.');
+        }
+
+        if (data.code) {
+          codePanel.style.display = 'block';
+          codeText.textContent = data.code;
+          statusMessage.textContent = 'Enter this code in WhatsApp: Linked Devices > Link with phone number.';
+        }
+
+        if (data.status === 'connecting' || data.status === 'reconnecting') {
+          statusMessage.textContent = 'WhatsApp connection initializing...';
+        }
+
+        if (data.status === 'open') {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          statusMessage.textContent = '✓ Device linked and Sentinel Core online!';
+          submitBtn.disabled = false;
+        }
+
+        if (data.status === 'failed') {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          statusMessage.textContent = 'Pairing failed: ' + (data.error || 'Timed out');
+          submitBtn.disabled = false;
+        }
+      } catch (err) {
+        statusMessage.textContent = 'Connection interrupted while checking pairing status. Retrying...';
+      }
+    }, 2500);
+  }
+
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(codeText.textContent.trim()).then(() => {
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => { copyBtn.textContent = 'Copy Code'; }, 1500);
+    }).catch(() => {
+      statusMessage.textContent = 'Clipboard access failed. Select and copy the code manually.';
+    });
+  });
+
+  submitBtn.addEventListener('click', requestPairing);
+</script>
+
+</body>
+</html>
